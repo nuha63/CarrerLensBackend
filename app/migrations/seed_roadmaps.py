@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 from app.database.service import get_db_service
-from app.database.models import Base, CareerPath, RoadmapPhase, RoadmapSkill
+from app.database.models import Base, CareerPath, RoadmapPhase, RoadmapSkill, UserSkillProgress
 
 ROADMAPS: list[dict] = [
     {
@@ -180,17 +180,16 @@ def seed():
 
     db = db_service.get_session()
     try:
+        # Clear existing roadmaps
+        print("Clearing existing roadmaps...")
+        db.query(UserSkillProgress).delete()
+        db.query(RoadmapSkill).delete()
+        db.query(RoadmapPhase).delete()
+        db.query(CareerPath).delete()
+        db.commit()
+
         seeded = 0
         for rm_data in ROADMAPS:
-            # Check if already exists
-            existing = db.query(CareerPath).filter(
-                CareerPath.name == rm_data["career_name"]
-            ).first()
-
-            if existing:
-                print(f"  [SKIP] {rm_data['career_name']} already exists.")
-                continue
-
             roadmap = CareerPath(
                 name=rm_data["career_name"],
                 description=rm_data["description"],

@@ -598,6 +598,15 @@ async def api_status():
     }
 
 
+@app.get("/api/seed-roadmaps")
+async def trigger_seed():
+    from app.migrations.seed_roadmaps import seed
+    try:
+        seed()
+        return {"success": True, "message": "Seeded successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
