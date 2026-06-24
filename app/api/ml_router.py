@@ -55,10 +55,11 @@ class JobMatchRequest(BaseModel):
 
 
 class SalaryPredictionRequest(BaseModel):
-    company_size: str  # "Small", "Medium", "Large"
-    industry: str
-    remote_option: bool
+    job_role: str
+    experience_years: int
+    education_level: str
     num_skills: int
+    high_demand_skills: List[str]
 
 
 class SkillGapRequest(BaseModel):
@@ -213,20 +214,22 @@ async def predict_salary(request: SalaryPredictionRequest, x_user_id: Optional[s
     try:
         ml_service = get_ml_service()
         result = ml_service.predict_salary(
-            company_size=request.company_size,
-            industry=request.industry,
-            remote_option=request.remote_option,
-            num_skills=request.num_skills
+            job_role=request.job_role,
+            experience_years=request.experience_years,
+            education_level=request.education_level,
+            num_skills=request.num_skills,
+            high_demand_skills=request.high_demand_skills
         )
         
         # Save to database if user_id provided
         if x_user_id:
             db_service = get_db_service()
             salary_data = {
-                "company_size": request.company_size,
-                "industry": request.industry,
-                "remote_option": request.remote_option,
+                "job_role": request.job_role,
+                "experience_years": request.experience_years,
+                "education_level": request.education_level,
                 "num_skills": request.num_skills,
+                "high_demand_skills": request.high_demand_skills,
                 "salary_min": result['salary_min'],
                 "salary_max": result['salary_max'],
                 "salary_avg": result['salary_avg'],
@@ -234,7 +237,7 @@ async def predict_salary(request: SalaryPredictionRequest, x_user_id: Optional[s
             db_service.save_salary_prediction(x_user_id, "", salary_data)
             logger.info(f"✅ Salary predicted & saved for user: {x_user_id}")
         
-        logger.info(f"✅ Salary predicted: ${result['salary_avg']:,}")
+        logger.info(f"✅ Salary predicted: {result['salary_avg']} BDT")
         return {
             "success": True,
             "data": result

@@ -16,6 +16,7 @@ except ImportError:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import hmac
 import hashlib
@@ -47,6 +48,7 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     from app.database.service import get_db_service
+    from app.database.models import SalaryBenchmark
     from sqlalchemy import text
     db = get_db_service().get_session()
     alters = [
@@ -55,7 +57,12 @@ async def startup_event():
         "ALTER TABLE user_progress ADD COLUMN target_skills JSON DEFAULT '[]'::json;",
         "ALTER TABLE user_progress ADD COLUMN preferred_job_categories JSON DEFAULT '[]'::json;",
         "ALTER TABLE user_progress ADD COLUMN daily_study_hours_goal INTEGER DEFAULT 1;",
-        "ALTER TABLE user_progress ADD COLUMN learning_pace VARCHAR DEFAULT 'medium';"
+        "ALTER TABLE user_progress ADD COLUMN learning_pace VARCHAR DEFAULT 'medium';",
+        "ALTER TABLE user_profiles ADD COLUMN profile_image_url VARCHAR;",
+        "ALTER TABLE salary_predictions ADD COLUMN job_role VARCHAR;",
+        "ALTER TABLE salary_predictions ADD COLUMN experience_years INTEGER;",
+        "ALTER TABLE salary_predictions ADD COLUMN education_level VARCHAR;",
+        "ALTER TABLE salary_predictions ADD COLUMN high_demand_skills JSON DEFAULT '[]'::json;"
     ]
     
     try:
@@ -67,6 +74,34 @@ async def startup_event():
             except Exception as e:
                 db.rollback()
                 # print(f"ℹ️ Skipped (already exists): {query}")
+        
+        # Seed SalaryBenchmarks
+        if db.query(SalaryBenchmark).count() == 0:
+            print("Seeding SalaryBenchmarks for Bangladesh market...")
+            benchmarks = [
+                SalaryBenchmark(job_role="Software Engineer", experience_level="Fresher", min_salary=25000, max_salary=40000, avg_salary=30000),
+                SalaryBenchmark(job_role="Software Engineer", experience_level="Mid", min_salary=50000, max_salary=90000, avg_salary=70000),
+                SalaryBenchmark(job_role="Software Engineer", experience_level="Senior", min_salary=100000, max_salary=180000, avg_salary=130000),
+                SalaryBenchmark(job_role="Data Scientist", experience_level="Fresher", min_salary=30000, max_salary=50000, avg_salary=40000),
+                SalaryBenchmark(job_role="Data Scientist", experience_level="Mid", min_salary=60000, max_salary=110000, avg_salary=85000),
+                SalaryBenchmark(job_role="Data Scientist", experience_level="Senior", min_salary=120000, max_salary=200000, avg_salary=150000),
+                SalaryBenchmark(job_role="Product Manager", experience_level="Fresher", min_salary=35000, max_salary=50000, avg_salary=40000),
+                SalaryBenchmark(job_role="Product Manager", experience_level="Mid", min_salary=60000, max_salary=100000, avg_salary=80000),
+                SalaryBenchmark(job_role="Product Manager", experience_level="Senior", min_salary=110000, max_salary=200000, avg_salary=140000),
+                SalaryBenchmark(job_role="UI/UX Designer", experience_level="Fresher", min_salary=20000, max_salary=35000, avg_salary=28000),
+                SalaryBenchmark(job_role="UI/UX Designer", experience_level="Mid", min_salary=40000, max_salary=75000, avg_salary=55000),
+                SalaryBenchmark(job_role="UI/UX Designer", experience_level="Senior", min_salary=80000, max_salary=140000, avg_salary=110000),
+                SalaryBenchmark(job_role="Digital Marketer", experience_level="Fresher", min_salary=15000, max_salary=25000, avg_salary=20000),
+                SalaryBenchmark(job_role="Digital Marketer", experience_level="Mid", min_salary=30000, max_salary=50000, avg_salary=40000),
+                SalaryBenchmark(job_role="Digital Marketer", experience_level="Senior", min_salary=60000, max_salary=100000, avg_salary=80000),
+                SalaryBenchmark(job_role="Other", experience_level="Fresher", min_salary=15000, max_salary=25000, avg_salary=20000),
+                SalaryBenchmark(job_role="Other", experience_level="Mid", min_salary=30000, max_salary=60000, avg_salary=45000),
+                SalaryBenchmark(job_role="Other", experience_level="Senior", min_salary=70000, max_salary=120000, avg_salary=90000),
+            ]
+            db.add_all(benchmarks)
+            db.commit()
+            print("✅ SalaryBenchmarks seeded!")
+            
     finally:
         db.close()
 
@@ -100,8 +135,18 @@ try:
     print("[OK] Roadmap Router registered successfully!")
 except Exception as e:
     print(f"[ERROR] Error loading Roadmap Router: {e}")
-    import traceback
-    traceback.print_exc()
+
+# Register Profile Router
+try:
+    from app.api.profile_router import router as profile_router
+    app.include_router(profile_router, prefix="/profile", tags=["Profile"])
+    print("[OK] Profile Router registered successfully!")
+except Exception as e:
+    print(f"[ERROR] Error loading Profile Router: {e}")
+
+# Mount static directory for profile pictures
+os.makedirs("uploads/profile_pictures", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 # Auth request models

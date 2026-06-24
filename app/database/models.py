@@ -21,6 +21,7 @@ class UserProfile(Base):
     education_level = Column(String, default="Bachelor")  # High School, Bachelor, Master, PhD
     current_industry = Column(String, default="IT")
     target_skills = Column(JSON, default=[])
+    profile_image_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -135,10 +136,11 @@ class SalaryPrediction(Base):
     match_id = Column(String, index=True)
     
     # Input
-    company_size = Column(String)
-    industry = Column(String)
-    remote_option = Column(Boolean, default=False)
+    job_role = Column(String)
+    experience_years = Column(Integer)
+    education_level = Column(String)
     num_skills = Column(Integer)
+    high_demand_skills = Column(JSON, default=[])
     
     # Results
     salary_min = Column(Integer)
@@ -149,6 +151,20 @@ class SalaryPrediction(Base):
     
     def __repr__(self):
         return f"<SalaryPrediction(user_id={self.user_id}, avg=${self.salary_avg})>"
+
+class SalaryBenchmark(Base):
+    """Bangladesh market salary benchmarks"""
+    __tablename__ = "salary_benchmarks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    job_role = Column(String, nullable=False, index=True)
+    experience_level = Column(String, nullable=False) # Fresher, Mid, Senior
+    min_salary = Column(Integer, nullable=False)
+    max_salary = Column(Integer, nullable=False)
+    avg_salary = Column(Integer, nullable=False)
+    
+    def __repr__(self):
+        return f"<SalaryBenchmark(role={self.job_role}, level={self.experience_level})>"
 
 
 class UserProgress(Base):

@@ -247,10 +247,11 @@ class MLService:
             raise
     
     def predict_salary(self,
-                      company_size: str,
-                      industry: str,
-                      remote_option: bool,
-                      num_skills: int) -> Dict[str, Any]:
+                      job_role: str,
+                      experience_years: int,
+                      education_level: str,
+                      num_skills: int,
+                      high_demand_skills: List[str]) -> Dict[str, Any]:
         """
         Predict salary range
         
@@ -262,41 +263,91 @@ class MLService:
             }
         """
         try:
-            company_size_map = {'Small': 0, 'Medium': 1, 'Large': 2}
-            industry_map = {'IT': 0, 'Finance': 1, 'Healthcare': 2, 'E-commerce': 3, 'Other': 4}
+            from app.database.service import get_db_service
+            from app.database.models import SalaryBenchmark
+            db = get_db_service().get_session()
             
-            company_encoded = company_size_map.get(company_size, 0)
-            industry_encoded = industry_map.get(industry, 4)
-            remote_encoded = int(remote_option)
-            
-            # Create feature vector
-            features = np.array([[
-                company_encoded,
-                industry_encoded,
-                remote_encoded,
-                num_skills
-            ]])
-            
-            # Scale and predict
-            if self.salary_predictor_scaler is None or self.salary_predictor is None:
-                raise ValueError("Salary predictor models are not loaded")
+            # Determine experience level
+            exp_level = "Fresher"
+            if experience_years >= 6:
+                exp_level = "Senior"
+            elif experience_years >= 3:
+                exp_level = "Mid"
                 
-            features_scaled = self.salary_predictor_scaler.transform(features)
-            predicted_salary = float(self.salary_predictor.predict(features_scaled)[0])
+            # Rule-based lookup
+            benchmark = db.query(SalaryBenchmark).filter(
+                SalaryBenchmark.job_role == job_role,
+                SalaryBenchmark.experience_level == exp_level
+            ).first()
             
-            # Generate range (convert yearly to monthly)
-            monthly_predicted = predicted_salary / 12.0
-            salary_min = int(monthly_predicted * 0.85)
-            salary_max = int(monthly_predicted * 1.15)
-            salary_avg = int(monthly_predicted)
+            if not benchmark:
+                # Fallback to 'Other' if role not found
+                benchmark = db.query(SalaryBenchmark).filter(
+                    SalaryBenchmark.job_role == "Other",
+                    SalaryBenchmark.experience_level == exp_level
+                ).first()
+                
+            base_min = benchmark.min_salary if benchmark else 15000
+            base_max = benchmark.max_salary if benchmark else 25000
+            base_avg = benchmark.avg_salary if benchmark else 20000
+            
+            db.close()
+
+            # ML Adjustment Layer (simulated via weighted factors for BDT context)
+            multiplier = 1.0
+            insights = []
+            
+            # Education adjustment
+            if education_level in ['Master', 'PhD']:
+                multiplier += 0.15
+                insights.append("Premium for advanced education (+15%)")
+            elif education_level == 'Bachelor':
+                multiplier += 0.05
+                insights.append("Standard degree adjustment (+5%)")
+                
+            # Skills adjustment
+            if num_skills > 15:
+                multiplier += 0.10
+                insights.append("Broad skill set bonus (+10%)")
+            elif num_skills > 8:
+                multiplier += 0.05
+                
+            # High demand skills adjustment
+            if high_demand_skills:
+                bonus = len(high_demand_skills) * 0.05
+                if bonus > 0.20:
+                    bonus = 0.20  # Cap at 20%
+                multiplier += bonus
+                insights.append(f"High-demand skills ({', '.join(high_demand_skills[:3])}) boosted value (+{int(bonus*100)}%)")
+                
+            # Calculate final range
+            final_avg = int(base_avg * multiplier)
+            final_min = int(base_min * multiplier)
+            final_max = int(base_max * multiplier)
+            
+            # Safeguard floor (realistic BDT tech minimum)
+            floor = 15000
+            if final_min < floor:
+                final_min = floor
+            if final_avg < floor + 5000:
+                final_avg = floor + 5000
+                
+            # Confidence score calculation
+            confidence = 85.0
+            if benchmark and benchmark.job_role != "Other":
+                confidence += 5.0
+            if experience_years > 0:
+                confidence += 5.0
             
             return {
-                "salary_min": salary_min,
-                "salary_max": salary_max,
-                "salary_avg": salary_avg
+                "salary_min": final_min,
+                "salary_max": final_max,
+                "salary_avg": final_avg,
+                "confidence": min(confidence, 98.0),
+                "insights": insights
             }
         except Exception as e:
-            logger.error(f"❌ Error predicting salary: {e}")
+            logger.error(f"❌ Error predicting BDT salary: {e}")
             raise
     
     def analyze_skill_gaps(self,
