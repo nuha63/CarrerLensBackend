@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 
 url = os.getenv('DATABASE_URL')
+if not url:
+    print("Error: DATABASE_URL not found in .env")
+    sys.exit(1)
+
 if 'postgresql+asyncpg' in url:
     url = url.replace('postgresql+asyncpg', 'postgresql')
 

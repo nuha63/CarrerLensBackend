@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class MLService:
     def __init__(self):
-        self.project_root = Path(__file__).parent.parent.parent.parent
-        self.models_dir = self.project_root / "career_lens_backend/app/trained_models"
+        self.project_root = Path(__file__).parent.parent.parent
+        self.models_dir = self.project_root / "app" / "trained_models"
         
         self.resume_scorer = None
         self.resume_scorer_scaler = None

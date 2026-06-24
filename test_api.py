@@ -1,7 +1,7 @@
 import requests
 import json
 
-url = "http://127.0.0.1:8001/api/job-match"
+url = "https://carrerlensbackend.onrender.com/api/job-match"
 payload = {
     "job_title": "Software Engineer",
     "company": "Google",
