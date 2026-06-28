@@ -32,6 +32,16 @@ class DatabaseService:
         if "postgresql+asyncpg" in database_url:
             database_url = database_url.replace("postgresql+asyncpg", "postgresql")
         
+        # Strip unsupported query parameters that psycopg2 doesn't understand
+        # (e.g. channel_binding=require from Neon connection strings)
+        if "?" in database_url:
+            base, params = database_url.split("?", 1)
+            filtered = "&".join(
+                p for p in params.split("&")
+                if not p.startswith("channel_binding")
+            )
+            database_url = f"{base}?{filtered}" if filtered else base
+        
         logger.info(f"Database URL: {database_url[:50]}...")
         
         # Create engine
