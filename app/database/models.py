@@ -22,6 +22,9 @@ class UserProfile(Base):
     current_industry = Column(String, default="IT")
     target_skills = Column(JSON, default=[])
     profile_image_url = Column(String, nullable=True)
+    is_premium = Column(Boolean, default=False)
+    premium_expiry = Column(DateTime, nullable=True)
+    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -276,3 +279,20 @@ class UserSkillProgress(Base):
 
     def __repr__(self):
         return f"<UserSkillProgress(user_id={self.user_id}, skill_id={self.skill_id}, completed={self.is_completed})>"
+
+class Payment(Base):
+    """Store payment and premium requests"""
+    __tablename__ = "payments"
+    
+    payment_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, index=True)
+    amount = Column(Float, nullable=False)
+    status = Column(String, default="pending")  # pending, approved, rejected
+    payment_method = Column(String)  # bKash, Card, etc.
+    transaction_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    def __repr__(self):
+        return f"<Payment(user_id={self.user_id}, amount={self.amount}, status={self.status})>"
+

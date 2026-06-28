@@ -144,6 +144,14 @@ try:
 except Exception as e:
     print(f"[ERROR] Error loading Profile Router: {e}")
 
+# Register Admin Router
+try:
+    from app.api.admin_router import router as admin_router
+    app.include_router(admin_router)
+    print("[OK] Admin Router registered successfully!")
+except Exception as e:
+    print(f"[ERROR] Error loading Admin Router: {e}")
+
 # Mount static directory for profile pictures
 os.makedirs("uploads/profile_pictures", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -198,6 +206,8 @@ def signup(request: AuthSignupRequest):
                 "id": user_id,
                 "email": email,
                 "name": str(user.name) if user.name else "User",
+                "is_premium": user.is_premium if hasattr(user, 'is_premium') else False,
+                "is_admin": user.is_admin if hasattr(user, 'is_admin') else False,
             },
         },
     )
@@ -231,6 +241,8 @@ def login(request: AuthLoginRequest):
                 "id": user_id,
                 "email": email,
                 "name": user.name or "User",
+                "is_premium": getattr(user, 'is_premium', False),
+                "is_admin": getattr(user, 'is_admin', False),
             },
         },
     )
@@ -282,6 +294,8 @@ def google_login(request: GoogleAuthRequest):
                     "id": user_id,
                     "email": email,
                     "name": name,
+                    "is_premium": getattr(user, 'is_premium', False),
+                    "is_admin": getattr(user, 'is_admin', False),
                 },
             },
         )
@@ -318,7 +332,13 @@ def google_login(request: GoogleAuthRequest):
                 content={
                     "access_token": _issue_access_token(user_id, email),
                     "token_type": "bearer",
-                    "user": {"id": user_id, "email": email, "name": name}
+                    "user": {
+                        "id": user_id, 
+                        "email": email, 
+                        "name": name,
+                        "is_premium": getattr(user, 'is_premium', False),
+                        "is_admin": getattr(user, 'is_admin', False)
+                    }
                 }
             )
         except Exception as inner_e:

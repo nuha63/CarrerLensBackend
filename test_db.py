@@ -8,7 +8,8 @@ async def main():
     
     paths = session.query(CareerPath).all()
     for path in paths:
-        print(f"ID: {path.id}, Name: {path.name}, Phases: {len(path.phases)}")
+        print(f"ID: {path.id}, Name: {path.name}, Phases: {len(path.phases)}") # type: ignore
+
         
 if __name__ == "__main__":
     asyncio.run(main())
