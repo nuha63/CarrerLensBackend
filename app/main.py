@@ -124,16 +124,8 @@ async def startup_event():
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://career-lens-flutter.vercel.app",
-        "https://friendly-salamander-08d99c.netlify.app",
-        "https://carrerlensbackend.onrender.com",
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://10.0.2.2:8001",
-        "http://10.0.2.2:8000",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
