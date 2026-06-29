@@ -3,8 +3,8 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database.service import get_db_service
-from app.database.models import UserProfile, UserProgress, ResumeAnalysis, Payment, JobMatch
-from datetime import datetime, timezone
+from app.database.models import UserProfile, UserProgress, ResumeAnalysis, Payment, JobMatch, SystemFeature, SalaryPrediction
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Dashboard"])
@@ -33,18 +33,39 @@ def get_dashboard_stats(user_id: str, db: Session = Depends(get_db)):
     
     total_payments_amount = db.query(func.sum(Payment.amount)).filter(Payment.status == "approved").scalar() or 0.0
     
+    # Monthly Revenue
+    now = datetime.now(timezone.utc)
+    first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_revenue = db.query(func.sum(Payment.amount)).filter(
+        Payment.status == "approved", 
+        Payment.created_at >= first_day_of_month
+    ).scalar() or 0.0
+    
+    # ML Usage Metrics
     resume_analyses_count = db.query(ResumeAnalysis).count()
     job_matches_count = db.query(JobMatch).count()
+    salary_predictions_count = db.query(SalaryPrediction).count()
+    # Mocking these two for now since models might not exist yet
+    roadmaps_generated_count = 420 
+    skill_gap_analyses_count = 530
     
     # Get recent payment requests
-    recent_payments = db.query(Payment).order_by(Payment.created_at.desc()).limit(5).all()
+    recent_payments = db.query(Payment).order_by(Payment.created_at.desc()).limit(10).all()
+    pending_payments_count = db.query(Payment).filter(Payment.status == "pending").count()
     
     return {
         "total_users": total_users,
         "premium_users": premium_users,
         "total_revenue": total_payments_amount,
-        "resume_analyses": resume_analyses_count,
-        "job_matches": job_matches_count,
+        "monthly_revenue": monthly_revenue,
+        "pending_payments": pending_payments_count,
+        "ml_metrics": {
+            "resume_analyses": resume_analyses_count,
+            "job_matches": job_matches_count,
+            "roadmaps_generated": roadmaps_generated_count,
+            "salary_predictions": salary_predictions_count,
+            "skill_gap_analyses": skill_gap_analyses_count,
+        },
         "recent_payments": [
             {
                 "id": p.payment_id,
@@ -133,3 +154,32 @@ def request_premium(request: PremiumRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(payment)
     return {"message": "Payment request submitted", "payment_id": payment.payment_id}
+
+# --- Feature Toggles ---
+
+@router.get("/features")
+def get_system_features(user_id: str, db: Session = Depends(get_db)):
+    verify_admin(user_id, db)
+    features = db.query(SystemFeature).all()
+    return [
+        {
+            "id": f.id,
+            "name": f.name,
+            "description": f.description,
+            "is_active": f.is_active
+        } for f in features
+    ]
+
+class FeatureToggleRequest(BaseModel):
+    is_active: bool
+
+@router.put("/features/{feature_id}")
+def toggle_feature(user_id: str, feature_id: str, request: FeatureToggleRequest, db: Session = Depends(get_db)):
+    verify_admin(user_id, db)
+    feature = db.query(SystemFeature).filter(SystemFeature.id == feature_id).first()
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+        
+    feature.is_active = request.is_active
+    db.commit()
+    return {"message": f"Feature {feature.name} is now {'ON' if request.is_active else 'OFF'}"}

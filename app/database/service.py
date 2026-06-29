@@ -66,7 +66,32 @@ class DatabaseService:
         # Create session factory
         # expire_on_commit=False keeps attributes accessible after session.close()
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False)
+        
+        # Initialize default features
+        self._init_features()
     
+    def _init_features(self):
+        """Initialize default system features if they don't exist"""
+        db = self.get_session()
+        try:
+            from app.database.models import SystemFeature
+            default_features = [
+                {"id": "resume_analysis", "name": "Resume Analysis", "description": "AI-powered resume parsing and scoring"},
+                {"id": "job_matching", "name": "Job Matching", "description": "Match resumes to job descriptions"},
+                {"id": "salary_prediction", "name": "Salary Prediction", "description": "Predict salary based on skills"},
+                {"id": "roadmaps", "name": "Career Roadmaps", "description": "Generate step-by-step career roadmaps"},
+                {"id": "skill_gap", "name": "Skill Gap Analysis", "description": "Analyze missing skills for target roles"},
+            ]
+            for feat in default_features:
+                existing = db.query(SystemFeature).filter(SystemFeature.id == feat["id"]).first()
+                if not existing:
+                    db.add(SystemFeature(**feat))
+            db.commit()
+        except Exception as e:
+            logger.error(f"Error initializing features: {e}")
+        finally:
+            db.close()
+
     def get_session(self) -> Session:
         """Get database session"""
         return self.SessionLocal()

@@ -296,3 +296,15 @@ class Payment(Base):
     def __repr__(self):
         return f"<Payment(user_id={self.user_id}, amount={self.amount}, status={self.status})>"
 
+class SystemFeature(Base):
+    """Store system feature toggles (Admin controlled)"""
+    __tablename__ = "system_features"
+    
+    id = Column(String, primary_key=True)  # e.g., 'resume_analysis', 'job_matching'
+    name = Column(String, nullable=False)
+    description = Column(String)
+    is_active = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    def __repr__(self):
+        return f"<SystemFeature(id={self.id}, active={self.is_active})>"
