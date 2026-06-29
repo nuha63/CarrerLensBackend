@@ -30,10 +30,26 @@ from app.database.models import UserProfile
 
 
 def _parse_cors_origins() -> list[str]:
-    """Parse comma-separated CORS origins from environment."""
-    raw = os.getenv("BACKEND_CORS_ORIGINS", "*")
+    """Parse comma-separated CORS origins from environment.
+    Always includes localhost variants for local web development.
+    """
+    raw = os.getenv("BACKEND_CORS_ORIGINS", "")
     origins = [item.strip() for item in raw.split(",") if item.strip()]
-    return origins or ["*"]
+    
+    # Always allow local web dev origins
+    local_origins = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ]
+    # Merge without duplicates
+    for o in local_origins:
+        if o not in origins:
+            origins.append(o)
+    
+    # If still empty fall back to wildcard
+    return origins if origins else ["*"]
 
 
 # Create FastAPI application.
@@ -107,7 +123,8 @@ async def startup_event():
 
 # Configure CORS
 cors_origins = _parse_cors_origins()
-allow_credentials = cors_origins != ["*"]
+# allow_credentials must be False when origins=["*"], True for specific origins
+allow_credentials = "*" not in cors_origins
 
 app.add_middleware(
     CORSMiddleware,
