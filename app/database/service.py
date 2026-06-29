@@ -64,7 +64,8 @@ class DatabaseService:
         logger.info("✅ Database tables created/verified")
         
         # Create session factory
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        # expire_on_commit=False keeps attributes accessible after session.close()
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False)
     
     def get_session(self) -> Session:
         """Get database session"""
@@ -86,8 +87,11 @@ class DatabaseService:
             else:
                 user = UserProfile(email=email, name=name, **kwargs)
                 db.add(user)
-            
+
             db.commit()
+            # Refresh BEFORE closing so all columns are loaded into the instance.
+            # With expire_on_commit=False this is a safety net; required without it.
+            db.refresh(user)
             logger.info(f"✅ User created/updated: {email}")
             return user
         except Exception as e:
@@ -108,7 +112,7 @@ class DatabaseService:
     
     # ==================== Resume ====================
     
-    def save_resume(self, user_id: str, file_name: str, resume_text: str, 
+    def save_resume(self, user_id: str, file_name: str, resume_text: str,
                    skills_found: Optional[List[str]] = None, **kwargs) -> UserResume:
         """Save uploaded resume"""
         db = self.get_session()
@@ -122,6 +126,7 @@ class DatabaseService:
             )
             db.add(resume)
             db.commit()
+            db.refresh(resume)  # load all columns before session closes
             logger.info(f"✅ Resume saved: {file_name}")
             return resume
         except Exception as e:
@@ -149,6 +154,7 @@ class DatabaseService:
             analysis = ResumeAnalysis(user_id=user_id, **analysis_data)
             db.add(analysis)
             db.commit()
+            db.refresh(analysis)  # load all columns before session closes
             logger.info(f"✅ Resume analysis saved: {analysis.analysis_id}")
             return analysis
         except Exception as e:
