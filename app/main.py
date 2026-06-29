@@ -184,6 +184,14 @@ try:
 except Exception as e:
     print(f"[ERROR] Error loading Dashboard Router: {e}")
 
+# Register Payment Router
+try:
+    from app.api.payment_router import router as payment_router
+    app.include_router(payment_router)
+    print("[OK] Payment Router registered successfully!")
+except Exception as e:
+    print(f"[ERROR] Error loading Payment Router: {e}")
+
 
 # Mount static directory for profile pictures
 os.makedirs("uploads/profile_pictures", exist_ok=True)
