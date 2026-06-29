@@ -169,6 +169,18 @@ try:
 except Exception as e:
     print(f"[ERROR] Error loading Admin Router: {e}")
 
+# Register Dashboard Analytics Router
+# IMPORTANT: must be included BEFORE the wildcard GET /api/dashboard/{user_id}
+# route defined inline below, so FastAPI resolves /api/dashboard/analytics/...
+# as a literal path segment rather than a user_id parameter.
+try:
+    from app.api.dashboard_router import router as dashboard_router
+    app.include_router(dashboard_router)
+    print("[OK] Dashboard Analytics Router registered successfully!")
+except Exception as e:
+    print(f"[ERROR] Error loading Dashboard Router: {e}")
+
+
 # Mount static directory for profile pictures
 os.makedirs("uploads/profile_pictures", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -476,6 +488,114 @@ async def save_preferences(user_id: str, request: UserPreferencesRequest):
             status_code=500,
             content={"message": f"Failed to save preferences: {str(e)}"}
         )
+
+@app.get("/api/dashboard/{user_id}")
+async def get_dashboard_analytics(user_id: str):
+    """
+    Get dynamic analytics for the user dashboard.
+
+    Career Readiness formula (matches Flutter client):
+        40% × resume_quality + 30% × skill_match + 30% × job_readiness
+    Weights are redistributed proportionally when some components are missing.
+    """
+    db = None
+    try:
+        db_service = get_db_service()
+        db = db_service.get_session()
+
+        from app.database.models import UserProfile, ResumeAnalysis, SkillGap, UserProgress
+
+        uid = str(user_id)  # safe string comparison against UUID columns
+
+        # ── Profile Completion ───────────────────────────────────────────
+        profile = db.query(UserProfile).filter(UserProfile.user_id == uid).first()
+        profile_score = 0
+        if profile:
+            fields = [profile.name, profile.experience_years, profile.education_level,
+                      profile.current_industry, profile.target_skills]
+            filled = sum(1 for f in fields if f)
+            profile_score = min(int((filled / 5) * 100), 100)
+
+        # ── Resume Quality ───────────────────────────────────────────────
+        latest_resume = (
+            db.query(ResumeAnalysis)
+            .filter(ResumeAnalysis.user_id == uid)
+            .order_by(ResumeAnalysis.created_at.desc())
+            .first()
+        )
+        resume_quality: int | None = None
+        if latest_resume:
+            if latest_resume.match_percentage is not None:
+                resume_quality = int(latest_resume.match_percentage)
+            elif latest_resume.resume_score is not None:
+                resume_quality = min(int(float(latest_resume.resume_score) * 100), 100)
+
+        # ── Skill Match ──────────────────────────────────────────────────
+        latest_skill_gap = (
+            db.query(SkillGap)
+            .filter(SkillGap.user_id == uid)
+            .order_by(SkillGap.created_at.desc())
+            .first()
+        )
+        skill_match: int | None = None
+        if latest_skill_gap and latest_skill_gap.user_skills and latest_skill_gap.total_missing is not None:
+            user_skill_count = len(latest_skill_gap.user_skills)
+            total_skills = user_skill_count + int(latest_skill_gap.total_missing)
+            skill_match = int((user_skill_count / total_skills) * 100) if total_skills > 0 else 0
+
+        # ── Job Readiness ────────────────────────────────────────────────
+        progress = db.query(UserProgress).filter(UserProgress.user_id == uid).first()
+        job_readiness: int | None = None
+        if progress and progress.job_readiness_score:
+            job_readiness = int(float(progress.job_readiness_score))
+
+        # ── Career Readiness (weighted formula) ──────────────────────────
+        # 40% Resume + 30% Skill + 30% Job Readiness.
+        # If a component is missing its weight is redistributed.
+        weighted_sum = 0.0
+        total_weight = 0
+        if resume_quality is not None: weighted_sum += resume_quality * 40; total_weight += 40
+        if skill_match    is not None: weighted_sum += skill_match    * 30; total_weight += 30
+        if job_readiness  is not None: weighted_sum += job_readiness  * 30; total_weight += 30
+
+        if total_weight > 0:
+            career_readiness = int(weighted_sum / total_weight)
+        else:
+            career_readiness = 0
+
+        # has_data = True as soon as at least one real analysis score exists
+        has_data = any([
+            resume_quality is not None,
+            skill_match is not None,
+            job_readiness is not None,
+        ])
+
+        return JSONResponse(status_code=200, content={
+            "career_readiness": career_readiness,
+            "resume_quality":   resume_quality,
+            "skill_match":      skill_match,
+            "job_readiness":    job_readiness,
+            "profile_complete": profile_score,
+            "has_data":         has_data,
+        })
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch dashboard analytics: {e}")
+        import traceback; traceback.print_exc()
+        # Return 200 with has_data=False so Flutter shows the onboarding card
+        # instead of the error state (network errors are handled separately).
+        return JSONResponse(status_code=200, content={
+            "career_readiness": 0,
+            "resume_quality":   None,
+            "skill_match":      None,
+            "job_readiness":    None,
+            "profile_complete": 0,
+            "has_data":         False,
+        })
+    finally:
+        if db is not None:
+            db.close()
+
 
 @app.get("/api/progress/{user_id}")
 async def get_user_progress(user_id: str):
