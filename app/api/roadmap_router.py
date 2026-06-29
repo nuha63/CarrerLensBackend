@@ -21,12 +21,23 @@ def _serialize_phase(
 ) -> dict:
 
     completed_ids = completed_ids or []
-    skills_list = [s.skill_name for s in phase.skills] if phase.skills else []
+    
+    skills_list = [
+        {
+            "id": str(s.id),
+            "skill_name": s.skill_name,
+            "is_completed": s.id in completed_ids
+        }
+        for s in phase.skills
+    ] if phase.skills else []
+    
+    completed_skills_count = sum(1 for s in skills_list if s["is_completed"])
+    is_completed = (completed_skills_count == len(skills_list)) if skills_list else False
     
     # Generate a simple fallback description if none exists
     description = f"Learn and master the fundamentals of {phase.phase_name}."
     if skills_list:
-        description += f" Key topics include: {', '.join(skills_list[:3])}."
+        description += f" Key topics include: {', '.join([s['skill_name'] for s in skills_list[:3]])}."
 
     return {
         "id": str(phase.id),
@@ -35,9 +46,9 @@ def _serialize_phase(
         "phase_title": phase.phase_name,
         "phase_description": description,
         "estimated_weeks": 4,
-        "completion_percentage": 100 if (phase.id in completed_ids) else 0,
+        "completion_percentage": int((completed_skills_count / len(skills_list)) * 100) if skills_list else 0,
         "key_skills": skills_list,
-        "is_completed": phase.id in completed_ids,
+        "is_completed": is_completed,
         "created_at": None,
     }
 
@@ -80,6 +91,12 @@ def _serialize_roadmap(
 class PhaseProgressRequest(BaseModel):
     roadmap_id: str
     phase_id: str
+    is_completed: bool
+
+class SkillProgressRequest(BaseModel):
+    roadmap_id: str
+    phase_id: str
+    skill_id: str
     is_completed: bool
 
 
@@ -150,17 +167,17 @@ async def get_recommended_roadmap(user_id: str):
 async def get_user_roadmap_progress(user_id: str, roadmap_id: str):
     """
     GET /roadmaps/progress/{user_id}/{roadmap_id}
-    Returns list of completed phase IDs for a user+roadmap.
+    Returns list of completed skill IDs for a user+roadmap.
     """
     try:
         svc = get_roadmap_service()
-        completed_ids = svc.get_user_phase_progress(user_id, int(roadmap_id))
+        completed_ids = svc.get_user_skill_progress(user_id, int(roadmap_id))
         return JSONResponse(
             status_code=200,
             content={
                 "user_id": user_id,
                 "roadmap_id": roadmap_id,
-                "completed_phase_ids": [str(c) for c in completed_ids],
+                "completed_skill_ids": [str(c) for c in completed_ids],
                 "completed_count": len(completed_ids),
             }
         )
@@ -170,17 +187,17 @@ async def get_user_roadmap_progress(user_id: str, roadmap_id: str):
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
-@router.post("/progress/{user_id}")
-async def update_phase_progress(user_id: str, request: PhaseProgressRequest):
+@router.post("/progress/skill/{user_id}")
+async def update_skill_progress(user_id: str, request: SkillProgressRequest):
     """
-    POST /roadmaps/progress/{user_id}
-    Mark or unmark a phase as completed.
+    POST /roadmaps/progress/skill/{user_id}
+    Mark or unmark a specific skill as completed.
     """
     try:
         svc = get_roadmap_service()
-        success = svc.set_phase_completion(
+        success = svc.set_skill_completion(
             user_id=user_id,
-            phase_id=int(request.phase_id),
+            skill_id=int(request.skill_id),
             is_completed=request.is_completed,
         )
         return JSONResponse(
@@ -190,13 +207,15 @@ async def update_phase_progress(user_id: str, request: PhaseProgressRequest):
                 "user_id": user_id,
                 "roadmap_id": request.roadmap_id,
                 "phase_id": request.phase_id,
+                "skill_id": request.skill_id,
                 "is_completed": request.is_completed,
             }
         )
     except ValueError:
-        return JSONResponse(status_code=400, content={"detail": "Invalid phase ID format"})
+        return JSONResponse(status_code=400, content={"detail": "Invalid ID format"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
+
 
 
 @router.get("/{roadmap_id}")

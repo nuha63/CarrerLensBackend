@@ -207,13 +207,12 @@ class RoadmapService:
             db.close()
 
     # ─────────────────────────────────────────────
-    # PROGRESS: get completed skills/phases
     # ─────────────────────────────────────────────
-    def get_user_phase_progress(self, user_id: str, roadmap_id: int) -> List[int]:
+    # PROGRESS: get completed skills
+    # ─────────────────────────────────────────────
+    def get_user_skill_progress(self, user_id: str, roadmap_id: int) -> List[int]:
         """
-        Return list of completed phase IDs for a user+roadmap.
-        A phase is considered completed if ALL its skills are completed.
-        If a phase has no skills, we consider it not completed (or we could assume completed, but safer to assume not).
+        Return list of completed skill IDs for a user+roadmap.
         """
         db = self._session()
         try:
@@ -221,70 +220,64 @@ class RoadmapService:
             if not roadmap:
                 return []
             
-            completed_phase_ids = []
+            completed_skill_ids = []
             
             for phase in roadmap.phases:
                 if not phase.skills:
-                    # If phase has no skills, we cannot determine completion from user_skill_progress
                     continue
                     
                 skill_ids = [s.id for s in phase.skills]
-                completed_count = db.query(UserSkillProgress).filter(
+                completed_records = db.query(UserSkillProgress).filter(
                     UserSkillProgress.user_id == user_id,
                     UserSkillProgress.skill_id.in_(skill_ids),
                     UserSkillProgress.is_completed == True
-                ).count()
+                ).all()
                 
-                if completed_count == len(skill_ids):
-                    completed_phase_ids.append(phase.id)
+                completed_skill_ids.extend([r.skill_id for r in completed_records])
                     
-            return completed_phase_ids
+            return completed_skill_ids
         finally:
             db.close()
 
     # ─────────────────────────────────────────────
-    # PROGRESS: mark/unmark phase
+    # PROGRESS: mark/unmark skill
     # ─────────────────────────────────────────────
-    def set_phase_completion(
-        self, user_id: str, phase_id: int, is_completed: bool
+    def set_skill_completion(
+        self, user_id: str, skill_id: int, is_completed: bool
     ) -> bool:
         """
-        Set all skills in a phase to completed or not completed.
+        Set a specific skill to completed or not completed.
         """
         db = self._session()
         try:
-            phase = db.query(RoadmapPhase).filter(RoadmapPhase.id == phase_id).first()
-            if not phase:
-                return False
-                
-            for skill in phase.skills:
-                record = db.query(UserSkillProgress).filter(
-                    UserSkillProgress.user_id == user_id,
-                    UserSkillProgress.skill_id == skill.id
-                ).first()
+            record = db.query(UserSkillProgress).filter(
+                UserSkillProgress.user_id == user_id,
+                UserSkillProgress.skill_id == skill_id
+            ).first()
 
-                if not record:
-                    record = UserSkillProgress(
-                        user_id=user_id,
-                        skill_id=skill.id,
-                    )
-                    db.add(record)
+            if not record:
+                record = UserSkillProgress(
+                    user_id=user_id,
+                    skill_id=skill_id,
+                )
+                db.add(record)
 
-                record.is_completed = is_completed  # type: ignore
-                record.completed_at = datetime.now(timezone.utc) if is_completed else None  # type: ignore
+            record.is_completed = is_completed  # type: ignore
+            record.completed_at = datetime.now(timezone.utc) if is_completed else None  # type: ignore
 
             db.commit()
             logger.info(
-                f"✅ Phase {phase_id} skills marked {'complete' if is_completed else 'incomplete'} "
+                f"✅ Skill {skill_id} marked {'complete' if is_completed else 'incomplete'} "
                 f"for user {user_id}"
             )
             return True
         except Exception as e:
             db.rollback()
-            logger.error(f"❌ Error setting phase completion: {e}")
+            logger.error(f"❌ Error setting skill completion: {e}")
             raise
         finally:
             db.close()
+
 
 
 # Singleton

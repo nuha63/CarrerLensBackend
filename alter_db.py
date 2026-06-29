@@ -10,10 +10,9 @@ url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
 engine = create_engine(url)
 
 with engine.begin() as conn:
-    print("Altering user_progress table...")
+    print("Altering user_skill_progress table...")
     try:
-        conn.execute(text("ALTER TABLE user_progress ADD COLUMN study_hours_logged FLOAT DEFAULT 0.0;"))
-        conn.execute(text("ALTER TABLE user_progress ADD COLUMN last_study_date DATE;"))
-        print("Columns added successfully!")
+        conn.execute(text("ALTER TABLE user_skill_progress ALTER COLUMN user_id TYPE VARCHAR;"))
+        print("Column type altered successfully!")
     except Exception as e:
-        print(f"Error (maybe columns already exist?): {e}")
+        print(f"Error: {e}")

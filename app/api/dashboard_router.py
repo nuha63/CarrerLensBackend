@@ -133,14 +133,22 @@ async def get_dashboard_analytics(user_id: str):
                 content={"detail": f"User '{uid}' not found."},
             )
 
-        # ── 2. Check for uploaded resume ─────────────────────────────────
+        # ── 2. & 3. Check for uploaded resume & Analysis ──────────────────
         latest_uploaded_resume = (
             db.query(UserResume)
             .filter(UserResume.user_id == uid)
             .order_by(UserResume.created_at.desc())
             .first()
         )
-        has_resume = latest_uploaded_resume is not None
+        
+        latest_analysis = (
+            db.query(ResumeAnalysis)
+            .filter(ResumeAnalysis.user_id == uid)
+            .order_by(ResumeAnalysis.created_at.desc())
+            .first()
+        )
+        
+        has_resume = (latest_uploaded_resume is not None) or (latest_analysis is not None)
 
         if not has_resume:
             return JSONResponse(
@@ -151,15 +159,7 @@ async def get_dashboard_analytics(user_id: str):
                 },
             )
 
-        # ── 3. Resume Quality ────────────────────────────────────────────
-        # Source: latest ResumeAnalysis row.
-        # Prefer match_percentage (0-100 int) over resume_score (0-1 float).
-        latest_analysis = (
-            db.query(ResumeAnalysis)
-            .filter(ResumeAnalysis.user_id == uid)
-            .order_by(ResumeAnalysis.created_at.desc())
-            .first()
-        )
+        # ── Resume Quality ───────────────────────────────────────────────
         resume_quality: int | None = None
         if latest_analysis:
             if latest_analysis.match_percentage is not None:
