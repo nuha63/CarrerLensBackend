@@ -210,24 +210,33 @@ def signup(request: AuthSignupRequest):
     if not email:
         return JSONResponse(status_code=400, content={"detail": "Email is required"})
 
-    db_service = get_db_service()
-    user = db_service.create_user(email=email, name=request.name)
-    user_id = str(user.user_id)
-    token = _issue_access_token(user_id, email)
-    return JSONResponse(
-        status_code=200,
-        content={
-            "access_token": token,
-            "token_type": "bearer",
-            "user": {
-                "id": user_id,
-                "email": email,
-                "name": str(user.name) if user.name else "User",
-                "is_premium": user.is_premium if hasattr(user, 'is_premium') else False,
-                "is_admin": user.is_admin if hasattr(user, 'is_admin') else False,
+    try:
+        db_service = get_db_service()
+        user = db_service.create_user(email=email, name=request.name)
+        user_id = str(user.user_id)
+        token = _issue_access_token(user_id, email)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "access_token": token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user_id,
+                    "email": email,
+                    "name": str(user.name) if user.name else "User",
+                    "is_premium": getattr(user, 'is_premium', False),
+                    "is_admin": getattr(user, 'is_admin', False),
+                },
             },
-        },
-    )
+        )
+    except Exception as e:
+        import traceback
+        err = str(e)
+        print(f"[SIGNUP ERROR] {err}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"Signup failed: {err}"},
+        )
 
 
 @app.post("/auth/login")
@@ -237,32 +246,40 @@ def login(request: AuthLoginRequest):
     if not email:
         return JSONResponse(status_code=400, content={"detail": "Email is required"})
 
-    db_service = get_db_service()
-    db = db_service.get_session()
     try:
-        user = db.query(UserProfile).filter(UserProfile.email == email).first()
-        if not user:
-            # For testing/dev convenience, create profile if it doesn't exist
-            user = db_service.create_user(email=email, name="User")
-        user_id = str(user.user_id)
-    finally:
-        db.close()
+        db_service = get_db_service()
+        db = db_service.get_session()
+        try:
+            user = db.query(UserProfile).filter(UserProfile.email == email).first()
+            if not user:
+                user = db_service.create_user(email=email, name="User")
+            user_id = str(user.user_id)
+        finally:
+            db.close()
 
-    token = _issue_access_token(user_id, email)
-    return JSONResponse(
-        status_code=200,
-        content={
-            "access_token": token,
-            "token_type": "bearer",
-            "user": {
-                "id": user_id,
-                "email": email,
-                "name": user.name or "User",
-                "is_premium": getattr(user, 'is_premium', False),
-                "is_admin": getattr(user, 'is_admin', False),
+        token = _issue_access_token(user_id, email)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "access_token": token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user_id,
+                    "email": email,
+                    "name": user.name or "User",
+                    "is_premium": getattr(user, 'is_premium', False),
+                    "is_admin": getattr(user, 'is_admin', False),
+                },
             },
-        },
-    )
+        )
+    except Exception as e:
+        import traceback
+        err = str(e)
+        print(f"[LOGIN ERROR] {err}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"Login failed: {err}"},
+        )
 
 @app.post("/auth/google")
 def google_login(request: GoogleAuthRequest):
